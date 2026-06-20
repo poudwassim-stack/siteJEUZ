@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GSPN — Global Strategic Press Network</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>">
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-top">
+      <div class="ticker">
+        <span class="ticker-label">⚡ FLASH</span>
+        <div class="ticker-content">
+          <span id="ticker-text">Bienvenue sur le Global Strategic Press Network — Source officielle d'information géopolitique</span>
+        </div>
+      </div>
+    </div>
+    <div class="header-main">
+      <div class="header-inner">
+        <div class="header-brand">
+          <div class="brand-logo"><span class="logo-globe">🌐</span><div class="logo-rings"></div></div>
+          <div>
+            <h1>GLOBAL STRATEGIC PRESS NETWORK</h1>
+            <span class="brand-sub">Centre de Communication Stratégique Interétatique</span>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="header-time">
+            <span class="time-label">HEURE RÉSEAU</span>
+            <span class="time-value" id="header-time">--:--:--</span>
+          </div>
+          <div class="nation-indicator" id="nation-indicator">
+            <span class="dot"></span>
+            <span id="nation-label">NON CONNECTÉ</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-inner">
+      <button class="nav-btn active" data-page="public"><span class="nav-icon">📡</span><span>Fil d'info</span></button>
+      <button class="nav-btn" data-page="editor"><span class="nav-icon">✍️</span><span>Rédaction</span></button>
+      <button class="nav-btn" data-page="treaties"><span class="nav-icon">📜</span><span>Traités</span></button>
+      <button class="nav-btn" data-page="diplo"><span class="nav-icon">💬</span><span>Diplomatie</span></button>
+      <div class="nav-separator"></div>
+      <button class="nav-btn entity-btn" id="nav-entity"><span class="nav-icon">🔐</span><span>Accès Entité</span></button>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main>
+    <!-- FIL PUBLIC -->
+    <section class="page active" id="page-public">
+      <div class="broadcast-header">
+        <div class="broadcast-left">
+          <div class="broadcast-badge"><span class="broadcast-dot"></span><span>EN DIRECT</span></div>
+          <h2>FIL D'INFORMATION STRATÉGIQUE</h2>
+        </div>
+        <div class="broadcast-stats">
+          <div class="stat"><span class="stat-value" id="total-coms">0</span><span class="stat-label">Communiqués</span></div>
+          <div class="stat"><span class="stat-value" id="today-coms">0</span><span class="stat-label">Aujourd'hui</span></div>
+        </div>
+      </div>
+      <div class="news-columns">
+        <div class="news-column">
+          <div class="column-banner pouding"><div class="banner-flag">🦅</div><div class="banner-info"><h3>RÉPUBLIQUE FÉDÉRALE DE POUDING</h3><span class="banner-count" id="count-pouding">0</span></div><div class="banner-status online"><span class="status-dot"></span>EN LIGNE</div></div>
+          <div class="column-feed" id="col-pouding"></div>
+        </div>
+        <div class="news-column">
+          <div class="column-banner amir"><div class="banner-flag">⚔️</div><div class="banner-info"><h3>ÉTAT D'AMIR</h3><span class="banner-count" id="count-amir">0</span></div><div class="banner-status online"><span class="status-dot"></span>EN LIGNE</div></div>
+          <div class="column-feed" id="col-amir"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ÉDITEUR -->
+    <section class="page" id="page-editor"></section>
+
+    <!-- TRAITÉS -->
+    <section class="page" id="page-treaties"></section>
+
+    <!-- DIPLOMATIE -->
+    <section class="page" id="page-diplo"></section>
+  </main>
+
+  <footer><div class="footer-inner"><span>GSPN © 2024 — Réseau de Presse Stratégique Global</span><span class="footer-secure">🔒 Transmission Sécurisée</span></div></footer>
+
+  <!-- MODALS -->
+  <div class="modal-overlay hidden" id="modal-entity">
+    <div class="modal-box entity-modal">
+      <button class="modal-close" id="close-entity">✕</button>
+      <div class="modal-emblem">🌐</div>
+      <h3>IDENTIFICATION REQUISE</h3>
+      <p>Sélectionnez votre entité</p>
+      <div class="entity-select">
+        <button class="entity-option pouding" data-nation="pouding"><div class="entity-emblem">🦅</div><div class="entity-info"><span class="entity-name">République Fédérale de Pouding</span><span class="entity-code">RFP-001</span></div></button>
+        <button class="entity-option amir" data-nation="amir"><div class="entity-emblem">⚔️</div><div class="entity-info"><span class="entity-name">État d'Amir</span><span class="entity-code">EDA-002</span></div></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay hidden" id="modal-confirm"><div class="modal-box confirm-modal"></div></div>
+  <div class="modal-overlay hidden" id="modal-preview"><div class="modal-box preview-modal"></div></div>
+
+  <div class="toast-container" id="toast-container"></div>
+  <script src="script.js"></script>
+</body>
+</html>
