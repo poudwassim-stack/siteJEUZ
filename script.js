@@ -12,21 +12,56 @@ const save = d => localStorage.setItem('gspn', JSON.stringify(d));
 const nation = () => load().currentNation || null;
 const setN = n => { const d = load(); d.currentNation = n; save(d); };
 const allComs = () => load().communiques || [];
-const addCom = c => { const d = load(); d.communiques = [...(d.communiques||[]), c]; save(d); };
+const addCom = c => {
+  const d = load();
+  d.communiques = [...(d.communiques||[]), c];
+  save(d);
+
+  // SUPABASE
+  syncComToSupabase(c);
+};
 const delCom = id => { const d = load(); d.communiques = (d.communiques||[]).filter(c => c.id !== id); save(d); };
 const pubCom = id => { const d = load(); const c = (d.communiques||[]).find(x => x.id === id); if(c){c.published=true;c.date=new Date().toISOString();} save(d); };
 const pub = n => allComs().filter(c => c.nation === n && c.published).sort((a,b) => new Date(b.date)-new Date(a.date));
 const myDrafts = () => { const n=nation(); return n ? allComs().filter(c=>c.nation===n&&!c.published).sort((a,b)=>new Date(b.date)-new Date(a.date)) : []; };
+// ═════════ SUPABASE SYNC ═════════
 
+// COMMUNIQUÉS
+async function syncComToSupabase(com) {
+  await supabaseClient.from('communiques').insert([com]);
+}
+
+// TRAITÉS
+async function syncTreatyToSupabase(t) {
+  await supabaseClient.from('treaties').insert([t]);
+}
+
+// DIPLO
+async function syncDiploToSupabase(m) {
+  await supabaseClient.from('diplomacy').insert([m]);
+}
 // Treaties
 const allTreaties = () => load().treaties || [];
-const addTreaty = t => { const d=load(); d.treaties=[...(d.treaties||[]),t]; save(d); };
+const addTreaty = t => {
+  const d=load();
+  d.treaties=[...(d.treaties||[]),t];
+  save(d);
+
+  // SUPABASE
+  syncTreatyToSupabase(t);
+};
 const updateTreaty = (id, updates) => { const d=load(); const t=(d.treaties||[]).find(x=>x.id===id); if(t) Object.assign(t, updates); save(d); };
 
 // Diplo messages
 const allDiplo = () => load().diplomacy || [];
-const addDiplo = m => { const d=load(); d.diplomacy=[...(d.diplomacy||[]),m]; save(d); };
+const addDiplo = m => {
+  const d=load();
+  d.diplomacy=[...(d.diplomacy||[]),m];
+  save(d);
 
+  // SUPABASE
+  syncDiploToSupabase(m);
+};
 const uid = () => Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2,5).toUpperCase();
 const $ = s => document.querySelector(s);
 const $$ = s => document.querySelectorAll(s);
