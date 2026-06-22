@@ -28,17 +28,17 @@ const myDrafts = () => { const n=nation(); return n ? allComs().filter(c=>c.nati
 
 // COMMUNIQUÉS
 async function syncComToSupabase(com) {
-  await supabaseClient.from('communiques').insert([com]);
+  await supabase.from('communiques').insert([com]);
 }
 
 // TRAITÉS
 async function syncTreatyToSupabase(t) {
-  await supabaseClient.from('treaties').insert([t]);
+  await supabase.from('treaties').insert([t]);
 }
 
 // DIPLO
 async function syncDiploToSupabase(m) {
-  await supabaseClient.from('diplomacy').insert([m]);
+  await supabase.from('diplomacy').insert([m]);
 }
 // Treaties
 const allTreaties = () => load().treaties || [];
