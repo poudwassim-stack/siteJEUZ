@@ -5,7 +5,10 @@
 // L'appel passe par /api/chat (Vercel Serverless) — la clé API n'est JAMAIS exposée
 const API_URL = '/api/chat';
 const MODELS = ['google/gemma-4-31b-it:free','google/gemma-3-27b-it:free','meta-llama/llama-3.3-70b-instruct:free','qwen/qwen3-next-80b-a3b-instruct:free'];
-
+const supabaseClient = window.supabase.createClient(
+  "https://hvtfvdcdhpwfmbkzhucx.supabase.co",
+  "TON_ANON_KEY"
+);
 // ── DATA ──
 const load = () => { try { return JSON.parse(localStorage.getItem('gspn') || '{}'); } catch { return {}; } };
 const save = d => localStorage.setItem('gspn', JSON.stringify(d));
