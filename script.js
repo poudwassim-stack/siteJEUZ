@@ -2,30 +2,50 @@
    GSPN — FINAL — Communiqués + Traités + Diplomatie
    ══════════════════════════════════════════════════════════════ */
 
-// L'appel passe par /api/chat (Vercel Serverless) — la clé API n'est JAMAIS exposée
 const API_URL = '/api/chat';
 const MODELS = ['google/gemma-4-31b-it:free','google/gemma-3-27b-it:free','meta-llama/llama-3.3-70b-instruct:free','qwen/qwen3-next-80b-a3b-instruct:free'];
 
+// ── SUPABASE ──
+const SUPABASE_URL = 'https://hvtfvdcdhpwfmbkzhucx.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2dGZ2ZGNkaHB3Zm1ia3podWN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxMzk3NzcsImV4cCI6MjA5NzcxNTc3N30.pBY8OucUGLFUUbvZaeNvk06okec_xqkr3_lnUBrPY68';
+
+const sb = async (path, opts = {}) => {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      'Prefer': opts.prefer || '',
+      ...opts.headers
+    },
+    ...opts
+  });
+  if (r.status === 204 || r.status === 201) return null;
+  return r.json();
+};
+
+const dbGet = (table, query = '') => sb(`${table}?${query}`);
+const dbInsert = (table, data) => sb(table, { method: 'POST', body: JSON.stringify(data), prefer: 'return=minimal' });
+const dbUpdate = (table, match, data) => sb(`${table}?${match}`, { method: 'PATCH', body: JSON.stringify(data), prefer: 'return=minimal' });
+const dbDelete = (table, match) => sb(`${table}?${match}`, { method: 'DELETE' });
+
 // ── DATA ──
-const load = () => { try { return JSON.parse(localStorage.getItem('gspn') || '{}'); } catch { return {}; } };
-const save = d => localStorage.setItem('gspn', JSON.stringify(d));
-const nation = () => load().currentNation || null;
-const setN = n => { const d = load(); d.currentNation = n; save(d); };
-const allComs = () => load().communiques || [];
-const addCom = c => { const d = load(); d.communiques = [...(d.communiques||[]), c]; save(d); };
-const delCom = id => { const d = load(); d.communiques = (d.communiques||[]).filter(c => c.id !== id); save(d); };
-const pubCom = id => { const d = load(); const c = (d.communiques||[]).find(x => x.id === id); if(c){c.published=true;c.date=new Date().toISOString();} save(d); };
-const pub = n => allComs().filter(c => c.nation === n && c.published).sort((a,b) => new Date(b.date)-new Date(a.date));
-const myDrafts = () => { const n=nation(); return n ? allComs().filter(c=>c.nation===n&&!c.published).sort((a,b)=>new Date(b.date)-new Date(a.date)) : []; };
+const nation = () => { try { return JSON.parse(localStorage.getItem('gspn_nation') || 'null'); } catch { return null; } };
+const setN = n => localStorage.setItem('gspn_nation', JSON.stringify(n));
 
-// Treaties
-const allTreaties = () => load().treaties || [];
-const addTreaty = t => { const d=load(); d.treaties=[...(d.treaties||[]),t]; save(d); };
-const updateTreaty = (id, updates) => { const d=load(); const t=(d.treaties||[]).find(x=>x.id===id); if(t) Object.assign(t, updates); save(d); };
+const allComs = async () => (await dbGet('communiques', 'order=date.desc')) || [];
+const addCom = async c => dbInsert('communiques', c);
+const delCom = async id => dbDelete('communiques', `id=eq.${id}`);
+const pubCom = async id => dbUpdate('communiques', `id=eq.${id}`, { published: true, date: new Date().toISOString() });
+const pub = async n => (await dbGet('communiques', `nation=eq.${n}&published=eq.true&order=date.desc`)) || [];
+const myDrafts = async () => { const n = nation(); return n ? (await dbGet('communiques', `nation=eq.${n}&published=eq.false&order=date.desc`)) || [] : []; };
 
-// Diplo messages
-const allDiplo = () => load().diplomacy || [];
-const addDiplo = m => { const d=load(); d.diplomacy=[...(d.diplomacy||[]),m]; save(d); };
+const allTreaties = async () => (await dbGet('treaties', 'order=date.desc')) || [];
+const addTreaty = async t => dbInsert('treaties', t);
+const updateTreaty = async (id, updates) => dbUpdate('treaties', `id=eq.${id}`, updates);
+
+const allDiplo = async () => (await dbGet('diplomacy', 'order=date.asc')) || [];
+const addDiplo = async m => dbInsert('diplomacy', m);
 
 const uid = () => Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2,5).toUpperCase();
 const $ = s => document.querySelector(s);
@@ -34,11 +54,23 @@ const $$ = s => document.querySelectorAll(s);
 let wiz = {step:0,situation:'',tone:'',type:'',severity:'',zone:'',objective:'',details:''};
 let generated = null;
 
+// ── REALTIME POLLING ──
+let pollInterval = null;
+function startPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    const ap = $('.page.active')?.id;
+    if (ap === 'page-public') await renderPublic();
+    else if (ap === 'page-treaties') await renderTreaties();
+    else if (ap === 'page-diplo') await renderDiplo();
+  }, 5000);
+}
+
 // ── INIT ──
 document.addEventListener('DOMContentLoaded', () => {
-  clock(); setupNav(); setupEntity(); updateUI(); renderPublic();
-  // Synchro entre onglets
-  window.addEventListener('storage', e => { if(e.key==='gspn') { renderPublic(); const ap=$('.page.active')?.id; if(ap==='page-treaties') renderTreaties(); if(ap==='page-diplo') renderDiplo(); if(ap==='page-editor') renderDrafts(); } });
+  clock(); setupNav(); setupEntity(); updateUI();
+  renderPublic();
+  startPolling();
 });
 
 function clock() { const t=()=>{const n=new Date(),e=$('#header-time');if(e)e.textContent=[n.getHours(),n.getMinutes(),n.getSeconds()].map(x=>String(x).padStart(2,'0')).join(':');}; t(); setInterval(t,1000); }
@@ -84,8 +116,9 @@ const NF = n => n==='pouding'?'République Fédérale de Pouding':"État d'Amir"
 // ══════════════════════════════════════════════
 // FIL PUBLIC
 // ══════════════════════════════════════════════
-function renderPublic() {
-  const p=pub('pouding'),a=pub('amir'),all=[...p,...a].sort((x,y)=>new Date(y.date)-new Date(x.date));
+async function renderPublic() {
+  const [p, a] = await Promise.all([pub('pouding'), pub('amir')]);
+  const all=[...p,...a].sort((x,y)=>new Date(y.date)-new Date(x.date));
   const today=new Date().toDateString();
   $('#total-coms').textContent=all.length;
   $('#today-coms').textContent=all.filter(c=>new Date(c.date).toDateString()===today).length;
@@ -114,9 +147,9 @@ function card(c) {
 function empty(){return '<div class="empty-feed"><span class="empty-icon">📡</span><p class="empty-text">Aucune transmission</p></div>';}
 
 // ══════════════════════════════════════════════
-// EDITOR (inchangé, compact)
+// EDITOR
 // ══════════════════════════════════════════════
-function renderEditor() {
+async function renderEditor() {
   const n=nation();
   if(!n){$('#page-editor').innerHTML='<div class="auth-block"><span class="auth-icon">🔐</span><h3>ACCÈS RESTREINT</h3><p>Identification requise.</p><button class="btn-auth" onclick="openEntity()">🌐 Identifier</button></div>';return;}
   wiz={step:0,situation:'',tone:'',type:'',severity:'',zone:'',objective:'',details:''};generated=null;
@@ -187,38 +220,36 @@ function openPreview(){
     </div>`;
   m.classList.remove('hidden');
   $('#pclose').onclick=$('#pedit').onclick=()=>{m.classList.add('hidden');wiz.step=4;renderStep();};
-  $('#pdraft').onclick=()=>{addCom({...generated});m.classList.add('hidden');toast('Brouillon sauvé','success');renderEditor();};
-  $('#ppub').onclick=()=>{m.classList.add('hidden');cfm('🚀','PUBLIER ?','Visible par tous.','Publier',false,()=>{addCom({...generated,published:true});generated=null;toast('Publié !','success');renderEditor();renderPublic();});};
+  $('#pdraft').onclick=async()=>{await addCom({...generated});m.classList.add('hidden');toast('Brouillon sauvé','success');renderEditor();};
+  $('#ppub').onclick=()=>{m.classList.add('hidden');cfm('🚀','PUBLIER ?','Visible par tous.','Publier',false,async()=>{await addCom({...generated,published:true});generated=null;toast('Publié !','success');renderEditor();renderPublic();});};
 }
 
 // ── DRAFTS ──
-function renderDrafts(){
-  const d=myDrafts(),el=$('#dlist');if(!el)return;
+async function renderDrafts(){
+  const d=await myDrafts(),el=$('#dlist');if(!el)return;
   if(!d.length){el.innerHTML='<div class="empty-feed" style="padding:2rem"><span class="empty-icon" style="font-size:2rem">📭</span><p class="empty-text">Aucun brouillon</p></div>';return;}
   el.innerHTML=d.map(x=>`<div class="draft-card"><div class="draft-title">${esc(x.title)}</div><div class="draft-meta">${esc(x.type)} · ${fmtD(x.date)}</div><div class="draft-actions"><button class="btn-sm pub" data-id="${x.id}">🚀</button><button class="btn-sm del" data-id="${x.id}">🗑️</button></div></div>`).join('');
-  el.querySelectorAll('.pub').forEach(b=>{b.onclick=()=>cfm('🚀','PUBLIER ?','','Publier',false,()=>{pubCom(b.dataset.id);renderDrafts();renderPublic();toast('Publié !','success');});});
-  el.querySelectorAll('.del').forEach(b=>{b.onclick=()=>cfm('🗑️','SUPPRIMER ?','','Supprimer',true,()=>{delCom(b.dataset.id);renderDrafts();toast('Supprimé','info');});});
+  el.querySelectorAll('.pub').forEach(b=>{b.onclick=()=>cfm('🚀','PUBLIER ?','','Publier',false,async()=>{await pubCom(b.dataset.id);renderDrafts();renderPublic();toast('Publié !','success');});});
+  el.querySelectorAll('.del').forEach(b=>{b.onclick=()=>cfm('🗑️','SUPPRIMER ?','','Supprimer',true,async()=>{await delCom(b.dataset.id);renderDrafts();toast('Supprimé','info');});});
 }
 
 // ══════════════════════════════════════════════
 // TRAITÉS & ACCORDS
 // ══════════════════════════════════════════════
-function renderTreaties(){
-  const n=nation(),treaties=allTreaties().sort((a,b)=>new Date(b.date)-new Date(a.date));
+async function renderTreaties(){
+  const n=nation(),treaties=await allTreaties();
   const active=treaties.filter(t=>t.status==='accepted');
   const pending=treaties.filter(t=>t.status==='pending'||t.status==='revision');
   const past=treaties.filter(t=>t.status==='rejected');
 
   let html=`<div class="broadcast-header" style="margin-bottom:1.5rem"><div class="broadcast-left"><div class="broadcast-badge" style="background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.2);color:var(--sev-low)"><span>📜</span><span>TRAITÉS</span></div><h2>ACCORDS & TRAITÉS</h2></div><div style="font-size:0.8rem;color:var(--text-dim)">${active.length} traité${active.length!==1?'s':''} en vigueur</div></div>`;
 
-  // Formulaire de proposition
   html+=`<div class="treaty-form"><div class="treaty-form-title">📝 Proposer un traité</div>
     <div class="field-group"><label class="field-label">Titre du traité</label><input class="field-input" id="tt-title" placeholder="Ex: Accord de cessez-le-feu bilatéral"></div>
     <div class="field-group"><label class="field-label">Termes et conditions</label><textarea class="field-textarea" id="tt-content" placeholder="Décrivez les termes du traité, les obligations de chaque partie..."></textarea></div>
     <button class="btn btn-next" id="tt-send" style="margin-top:0.5rem">📨 Envoyer la proposition</button>
   </div>`;
 
-  // Traités en cours
   if(pending.length){
     html+=`<h3 style="font-size:0.85rem;font-weight:700;margin:1.5rem 0 0.75rem;color:var(--sev-mod)">⏳ En attente (${pending.length})</h3>`;
     html+='<div class="treaties-grid">'+pending.map(t=>treatyCard(t,n)).join('')+'</div>';
@@ -235,20 +266,18 @@ function renderTreaties(){
 
   $('#page-treaties').innerHTML=html;
 
-  // Events
-  $('#tt-send').onclick=()=>{
+  $('#tt-send').onclick=async()=>{
     const title=$('#tt-title').value.trim(),content=$('#tt-content').value.trim();
     if(!title||!content)return toast('Remplissez titre et termes','error');
-    addTreaty({id:'TRT-'+uid(),from:n,to:n==='pouding'?'amir':'pouding',title,content,status:'pending',date:new Date().toISOString(),revisionNote:null});
+    await addTreaty({id:'TRT-'+uid(),from:n,to:n==='pouding'?'amir':'pouding',title,content,status:'pending',date:new Date().toISOString(),revision_note:null,revision_from:null});
     toast('Proposition envoyée','success');renderTreaties();
   };
 
-  // Boutons d'action sur les traités
-  $$('[data-treaty-accept]').forEach(b=>{b.onclick=()=>{updateTreaty(b.dataset.treatyAccept,{status:'accepted'});toast('Traité accepté !','success');renderTreaties();};});
-  $$('[data-treaty-reject]').forEach(b=>{b.onclick=()=>{updateTreaty(b.dataset.treatyReject,{status:'rejected'});toast('Traité rejeté','info');renderTreaties();};});
-  $$('[data-treaty-revise]').forEach(b=>{b.onclick=()=>{
+  $$('[data-treaty-accept]').forEach(b=>{b.onclick=async()=>{await updateTreaty(b.dataset.treatyAccept,{status:'accepted'});toast('Traité accepté !','success');renderTreaties();};});
+  $$('[data-treaty-reject]').forEach(b=>{b.onclick=async()=>{await updateTreaty(b.dataset.treatyReject,{status:'rejected'});toast('Traité rejeté','info');renderTreaties();};});
+  $$('[data-treaty-revise]').forEach(b=>{b.onclick=async()=>{
     const note=prompt('Quelle révision demandez-vous ?');
-    if(note&&note.trim()){updateTreaty(b.dataset.treatyRevise,{status:'revision',revisionNote:note.trim(),revisionFrom:n});toast('Demande de révision envoyée','info');renderTreaties();}
+    if(note&&note.trim()){await updateTreaty(b.dataset.treatyRevise,{status:'revision',revision_note:note.trim(),revision_from:n});toast('Demande de révision envoyée','info');renderTreaties();}
   };});
 }
 
@@ -256,7 +285,6 @@ function treatyCard(t,myNation){
   const statusLabels={pending:'En attente',accepted:'Accepté',rejected:'Rejeté',revision:'Révision demandée'};
   const canAct = t.to===myNation && t.status==='pending';
   const canActRevision = t.from===myNation && t.status==='revision';
-  const isMyProposal = t.from===myNation;
 
   let actions='';
   if(canAct){
@@ -283,7 +311,7 @@ function treatyCard(t,myNation){
     <div class="treaty-body">
       <div class="treaty-title">${esc(t.title)}</div>
       <div class="treaty-content">${esc(t.content)}</div>
-      ${t.revisionNote?`<div class="treaty-revision-note"><strong>${NI(t.revisionFrom)} Demande de révision :</strong> ${esc(t.revisionNote)}</div>`:''}
+      ${t.revision_note?`<div class="treaty-revision-note"><strong>${NI(t.revision_from)} Demande de révision :</strong> ${esc(t.revision_note)}</div>`:''}
       <div class="treaty-meta">
         <span>Proposé par ${NN(t.from)}</span>
         <span>${fmtDT(t.date)}</span>
@@ -297,10 +325,9 @@ function treatyCard(t,myNation){
 // ══════════════════════════════════════════════
 // CANAL DIPLOMATIQUE PRIVÉ
 // ══════════════════════════════════════════════
-function renderDiplo(){
+async function renderDiplo(){
   const n=nation();
-  const msgs=allDiplo().sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const other=n==='pouding'?'amir':'pouding';
+  const msgs=await allDiplo();
 
   let msgsHtml='';
   if(!msgs.length){
@@ -326,20 +353,18 @@ function renderDiplo(){
       </div>
     </div>`;
 
-  // Scroll en bas
   const container=$('#diplo-msgs');
   if(container) container.scrollTop=container.scrollHeight;
 
-  // Events
   $('#diplo-send').onclick=sendDiplo;
   $('#diplo-input').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendDiplo();}};
 }
 
-function sendDiplo(){
+async function sendDiplo(){
   const input=$('#diplo-input');
   const text=input.value.trim();
   if(!text)return;
-  addDiplo({id:'DPL-'+uid(),from:nation(),text,date:new Date().toISOString()});
+  await addDiplo({id:'DPL-'+uid(),from:nation(),text,date:new Date().toISOString()});
   input.value='';
   renderDiplo();
 }
